@@ -102,7 +102,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadHome()
-        viewModelScope.launch { safeDb { SyncWorker.enqueueAllPending(getApplication(), repo) } }
+        viewModelScope.launch { safeDb { SyncWorker.enqueueAllPending(getApplication<Application>(), repo) } }
     }
 
     fun loadHome() {
@@ -236,7 +236,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val closed = safeDb { repo.closeDispatch(d.uuid, System.currentTimeMillis()) } ?: return@launch
                 generateDocs(closed)
-                SyncWorker.enqueue(getApplication(), closed.uuid)
+                SyncWorker.enqueue(getApplication<Application>(), closed.uuid)
                 openDispatch = null
                 current = null
                 backStack.clear(); backStack.add(Screen.Home)
@@ -251,7 +251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = safeDb {
             try {
                 val list = repo.listItems(d.uuid)
-                val (pdf, xlsx) = Documents.generate(getApplication(), d, list)
+                val (pdf, xlsx) = Documents.generate(getApplication<Application>(), d, list)
                 repo.setDocuments(d.uuid, pdf.absolutePath, xlsx.absolutePath)
                 ""
             } catch (e: StorageFullException) {
@@ -310,7 +310,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             message = "Google Drive todavía no está configurado en este celular. Pedile al administrador que lo configure."
             return
         }
-        SyncWorker.enqueue(getApplication(), uuid, replace = true)
+        SyncWorker.enqueue(getApplication<Application>(), uuid, replace = true)
         message = "Reintentando el envío a Google Drive…"
     }
 
@@ -336,7 +336,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         settings.deviceToken = cfgToken
         backendConfigured = settings.isBackendConfigured
         cfgResult = if (backendConfigured) "Configuración guardada." else "Guardado. Falta completar la URL y el token para activar Google Drive."
-        if (backendConfigured) viewModelScope.launch { safeDb { SyncWorker.enqueueAllPending(getApplication(), repo, replace = true) } }
+        if (backendConfigured) viewModelScope.launch { safeDb { SyncWorker.enqueueAllPending(getApplication<Application>(), repo, replace = true) } }
     }
 
     fun testConfig() {

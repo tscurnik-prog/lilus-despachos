@@ -18,7 +18,7 @@ import com.google.mlkit.vision.common.InputImage
 class ScanDebouncer(private val sameCodeMs: Long = 2500, private val anyCodeMs: Long = 700) {
     private var lastCode: String? = null
     private var lastSeenAt = 0L
-    private var lastEmitAt = 0L
+    private var lastEmitAt: Long? = null
 
     @Synchronized
     fun accept(code: String, now: Long): Boolean {
@@ -26,7 +26,8 @@ class ScanDebouncer(private val sameCodeMs: Long = 2500, private val anyCodeMs: 
             lastSeenAt = now // sigue frente a la cámara: se extiende la espera
             return false
         }
-        if (now - lastEmitAt < anyCodeMs) return false
+        val prev = lastEmitAt
+        if (prev != null && now - prev < anyCodeMs) return false
         lastCode = code
         lastSeenAt = now
         lastEmitAt = now
@@ -35,7 +36,7 @@ class ScanDebouncer(private val sameCodeMs: Long = 2500, private val anyCodeMs: 
 
     @Synchronized
     fun reset() {
-        lastCode = null; lastSeenAt = 0L; lastEmitAt = 0L
+        lastCode = null; lastSeenAt = 0L; lastEmitAt = null
     }
 }
 

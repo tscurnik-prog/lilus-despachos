@@ -29,7 +29,7 @@ object FileActions {
     fun mimeOf(f: File) = if (f.name.endsWith(".pdf", true)) PDF else XLSX
 
     fun open(ctx: Context, path: String?) {
-        val f = path?.let(::File)?.takeIf { it.exists() } ?: return toast(ctx, "El archivo no está disponible. Generá los comprobantes de nuevo.")
+        val f = path?.let { File(it) }?.takeIf { it.exists() } ?: return toast(ctx, "El archivo no está disponible. Generá los comprobantes de nuevo.")
         val i = Intent(Intent.ACTION_VIEW).setDataAndType(uri(ctx, f), mimeOf(f))
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
@@ -40,7 +40,7 @@ object FileActions {
     }
 
     fun share(ctx: Context, vararg paths: String?) {
-        val files = paths.mapNotNull { p -> p?.let(::File)?.takeIf { it.exists() } }
+        val files = paths.mapNotNull { p -> p?.let { File(it) }?.takeIf { it.exists() } }
         if (files.isEmpty()) return toast(ctx, "No hay archivos para compartir.")
         val i = if (files.size == 1) {
             Intent(Intent.ACTION_SEND).setType(mimeOf(files[0])).putExtra(Intent.EXTRA_STREAM, uri(ctx, files[0]))
@@ -57,7 +57,7 @@ object FileActions {
     }
 
     fun print(ctx: Context, path: String?, jobName: String) {
-        val f = path?.let(::File)?.takeIf { it.exists() } ?: return toast(ctx, "El PDF no está disponible.")
+        val f = path?.let { File(it) }?.takeIf { it.exists() } ?: return toast(ctx, "El PDF no está disponible.")
         val pm = ctx.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: return toast(ctx, "Este celular no permite imprimir.")
         val attrs = PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build()
         try {

@@ -32,8 +32,8 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
         if (!settings.isBackendConfigured) return@withContext Result.success() // queda "pendiente"
 
         val items = repo.listItems(uuid)
-        var pdf = d.pdfPath?.let(::File)?.takeIf { it.exists() && it.length() > 0 }
-        var xlsx = d.xlsxPath?.let(::File)?.takeIf { it.exists() && it.length() > 0 }
+        var pdf = d.pdfPath?.let { File(it) }?.takeIf { it.exists() && it.length() > 0 }
+        var xlsx = d.xlsxPath?.let { File(it) }?.takeIf { it.exists() && it.length() > 0 }
         if (pdf == null || xlsx == null) {
             try {
                 val (p, x) = Documents.generate(applicationContext, d, items)
