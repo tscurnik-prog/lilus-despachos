@@ -1,0 +1,95 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Permiso de ejecución de gradlew
+        run: |
+          chmod +x gradlew
+          # Si gradlew quedó sin permiso de ejecución en git, se corrige una sola vez en el repo
+          if [ "$(git ls-files -s gradlew | cut -c1-6)" != "100755" ] && [ "${{ github.event_name }}" = "push" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git update-index --chmod=+x gradlew
+            git commit -m "Marcar gradlew como ejecutable [skip ci]" && git push || echo "No se pudo actualizar el modo de gradlew (no bloquea la compilación)"
+          fi
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Firma fija de depuración (se crea una sola vez)
+        run: |
+          if [ ! -f app/lilus-debug.jks ]; then
+            keytool -genkeypair -keystore app/lilus-debug.jks -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Lilus Despachos Debug,O=Lilus,C=AR"
+            if [ "${{ github.event_name }}" = "push" ]; then
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git add app/lilus-debug.jks
+              git commit -m "Agregar firma fija de depuración [skip ci]" && git push || echo "No se pudo guardar la firma en el repo"
+            fi
+          fi
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK debug
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Verificar APK
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK" || { echo "::error::No se generó el APK"; exit 1; }
+          test -s "$APK" || { echo "::error::El APK tiene tamaño cero"; exit 1; }
+          ls -l "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          echo "Build tools: $BT"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label|uses-permission)" || true
+          "$BT/apksigner" verify --print-certs "$APK" | head -5
+          cp "$APK" "LILUS-DESPACHOS-${{ github.run_number }}.apk"
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LILUS-DESPACHOS-apk-${{ github.run_number }}
+          path: LILUS-DESPACHOS-${{ github.run_number }}.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Pruebas automáticas (app)
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Pruebas automáticas (backend Apps Script)
+        run: node backend/backend.test.js
+
+      - name: Publicar reporte de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-pruebas-${{ github.run_number }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
