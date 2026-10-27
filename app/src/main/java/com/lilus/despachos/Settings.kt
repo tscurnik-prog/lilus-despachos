@@ -2,10 +2,7 @@ package com.lilus.despachos
 
 import android.content.Context
 
-/**
- * Preferencias locales del celular. La URL del backend y el token del dispositivo
- * los carga un administrador desde la pantalla "Configuración": NO están en el código.
- */
+/** Preferencias locales del celular. No guarda contraseñas: solo el email de la cuenta Google elegida. */
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("lilus_settings", Context.MODE_PRIVATE)
 
@@ -21,24 +18,29 @@ class Settings(context: Context) {
         get() = prefs.getString("logistica", "") ?: ""
         set(v) = prefs.edit().putString("logistica", v).apply()
 
-    var backendUrl: String
-        get() = prefs.getString("backend_url", "") ?: ""
-        set(v) = prefs.edit().putString("backend_url", v.trim()).apply()
+    /** Pausar la cámara después de cada lectura hasta tocar SIGUIENTE. Activado de fábrica. */
+    var confirmEachScan: Boolean
+        get() = prefs.getBoolean("confirm_each_scan", true)
+        set(v) = prefs.edit().putBoolean("confirm_each_scan", v).apply()
 
-    var deviceToken: String
-        get() = prefs.getString("device_token", "") ?: ""
-        set(v) = prefs.edit().putString("device_token", v.trim()).apply()
+    /** Cuenta Google conectada para guardar en Drive (vacío = sin conectar). */
+    var googleAccount: String
+        get() = prefs.getString("google_account", "") ?: ""
+        set(v) = prefs.edit().putString("google_account", v.trim()).apply()
 
-    val isBackendConfigured: Boolean
-        get() = isValidBackendUrl(backendUrl) && deviceToken.isNotBlank()
+    /** ID de la carpeta raíz "LILUS - DESPACHOS" en el Drive de esa cuenta (cache). */
+    var driveRootId: String
+        get() = prefs.getString("drive_root_id", "") ?: ""
+        set(v) = prefs.edit().putString("drive_root_id", v).apply()
 
-    companion object {
-        /** Solo HTTPS. */
-        fun isValidBackendUrl(url: String): Boolean {
-            val u = url.trim()
-            if (!u.startsWith("https://", ignoreCase = true)) return false
-            val host = u.substring("https://".length).substringBefore('/').substringBefore('?').substringBefore(':')
-            return host.isNotEmpty() && !host.contains(' ')
-        }
+    /** ID de la planilla central en el Drive de esa cuenta (cache). */
+    var driveBaseId: String
+        get() = prefs.getString("drive_base_id", "") ?: ""
+        set(v) = prefs.edit().putString("drive_base_id", v).apply()
+
+    val isDriveConnected: Boolean get() = googleAccount.isNotBlank()
+
+    fun disconnectDrive() {
+        prefs.edit().remove("google_account").remove("drive_root_id").remove("drive_base_id").apply()
     }
 }

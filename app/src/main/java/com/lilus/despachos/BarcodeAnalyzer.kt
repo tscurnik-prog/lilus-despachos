@@ -34,6 +34,12 @@ class ScanDebouncer(private val sameCodeMs: Long = 2500, private val anyCodeMs: 
         return true
     }
 
+    /** Al reanudar después de una pausa: el último código se sigue ignorando mientras esté a la vista. */
+    @Synchronized
+    fun holdCurrent(now: Long) {
+        if (lastCode != null) lastSeenAt = now
+    }
+
     @Synchronized
     fun reset() {
         lastCode = null; lastSeenAt = 0L; lastEmitAt = null

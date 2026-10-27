@@ -65,12 +65,34 @@ class LilusDbHelper(context: Context, name: String? = DB_NAME) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Versión 1: sin migraciones todavía. NUNCA borrar tablas: los datos del depósito no se pierden.
+        // NUNCA borrar tablas de despachos: los datos del depósito no se pierden.
+        if (oldVersion < 2) migrateLogisticsToV2(db)
+    }
+
+    /**
+     * v2: nueva lista de logísticas. Se quitan las iniciales de la v1 que ya no se usan,
+     * se conservan las que agregó el depósito a mano y se agregan las nuevas.
+     * Los despachos ya hechos conservan el nombre de logística con que se registraron.
+     */
+    private fun migrateLogisticsToV2(db: SQLiteDatabase) {
+        db.beginTransaction()
+        try {
+            val custom = db.rawQuery("SELECT name FROM logistic ORDER BY position", null).use { c ->
+                buildList { while (c.moveToNext()) add(c.getString(0)) }
+            }.filter { n -> Catalog.LOGISTICAS_V1.none { it.equals(n, true) } && Catalog.LOGISTICAS_INICIALES.none { it.equals(n, true) } }
+            db.delete("logistic", null, null)
+            (Catalog.LOGISTICAS_INICIALES + custom).forEachIndexed { i, n ->
+                db.insert("logistic", null, ContentValues().apply { put("name", n); put("position", i) })
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     companion object {
         const val DB_NAME = "lilus_despachos.db"
-        const val DB_VERSION = 1
+        const val DB_VERSION = 2
     }
 }
 

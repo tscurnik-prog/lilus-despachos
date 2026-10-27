@@ -2,6 +2,14 @@ package com.lilus.despachos
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +35,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -121,9 +128,9 @@ private fun SyncCard(vm: AppViewModel, d: Dispatch) {
                     }) { Text("Abrir carpeta en Drive") }
                 }
             }
-            !vm.backendConfigured -> {
-                Text("Pendiente: Google Drive todavía no está configurado en este celular.")
-                Text("Los comprobantes quedan guardados acá y se enviarán cuando se configure.", fontSize = 13.sp)
+            !vm.driveConnected -> {
+                Text("Pendiente: no hay una cuenta Google conectada en este celular.")
+                Text("Los comprobantes quedan guardados acá y se envían al conectar la cuenta en Configuración.", fontSize = 13.sp)
             }
             d.syncStatus == SyncStatus.ERROR -> {
                 Text("No se pudo enviar todavía.")
@@ -188,26 +195,80 @@ fun HistoryScreen(vm: AppViewModel) {
 
 @Composable
 fun ConfigScreen(vm: AppViewModel) {
+    val activity = LocalContext.current as? android.app.Activity
+    val scope = rememberCoroutineScope()
+    val googleUi = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val act = activity ?: return@rememberLauncherForActivityResult
+        if (res.resultCode != android.app.Activity.RESULT_OK) {
+            vm.onGoogleError("Se canceló la conexión con Google.")
+            return@rememberLauncherForActivityResult
+        }
+        when (val r = GoogleAuth.finish(act, res.data)) {
+            is GoogleAuth.Start.Token -> vm.onGoogleToken(r.token)
+            is GoogleAuth.Start.Failed -> vm.onGoogleError(r.message)
+            is GoogleAuth.Start.NeedsUi -> vm.onGoogleError("Probá de nuevo.")
+        }
+    }
+    val connect: () -> Unit = {
+        val act = activity
+        if (act != null) {
+            vm.setGoogleBusy(true)
+            scope.launch {
+                // Sin cuenta indicada: Android muestra las cuentas Google del celular para elegir
+                when (val r = GoogleAuth.start(act, null)) {
+                    is GoogleAuth.Start.NeedsUi -> try {
+                        googleUi.launch(IntentSenderRequest.Builder(r.sender).build())
+                    } catch (e: Exception) {
+                        vm.onGoogleError("No se pudo abrir la pantalla de Google.")
+                    }
+                    is GoogleAuth.Start.Token -> vm.onGoogleToken(r.token)
+                    is GoogleAuth.Start.Failed -> vm.onGoogleError(r.message)
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(Color.White)) {
         TopBar("Configuración", onBack = { vm.back() })
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Conexión con Google Drive (la carga un administrador)", fontWeight = FontWeight.Bold)
-            Text(
-                "Pegá la URL del backend de Apps Script (empieza con https://script.google.com/…) y el token de este celular. " +
-                    "No se usa la contraseña de Gmail.",
-                fontSize = 13.sp, color = LilusColors.Grey,
-            )
-            OutlinedTextField(vm.cfgUrl, { vm.cfgUrl = it }, label = { Text("URL del backend (https)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(
-                vm.cfgToken, { vm.cfgToken = it }, label = { Text("Token del celular") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SecondaryButton("Probar conexión", { vm.testConfig() }, Modifier.weight(1f), enabled = !vm.cfgTesting)
-                SecondaryButton("Guardar", { vm.saveConfig() }, Modifier.weight(1f))
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // ---- Escaneo ----
+            Text("Escaneo", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Confirmar cada lectura con SIGUIENTE", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Después de leer un paquete la cámara se pausa hasta tocar SIGUIENTE. Evita leer otro código por mover el celular.",
+                        fontSize = 13.sp, color = LilusColors.Grey,
+                    )
+                }
+                Switch(checked = vm.confirmEachScan, onCheckedChange = { vm.setConfirmEachScanOption(it) })
             }
-            if (vm.cfgTesting) Text("Probando…")
-            vm.cfgResult?.let { Text(it, fontWeight = FontWeight.SemiBold) }
+            HorizontalDivider()
+
+            // ---- Google Drive ----
+            Text("Google Drive", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            if (vm.driveConnected) {
+                InfoCard(bg = LilusColors.GreenBg) {
+                    Text("Conectado", color = LilusColors.Green, fontWeight = FontWeight.Bold)
+                    Text(vm.driveAccount)
+                    Text("Se guarda en Drive › despachos › (logística).", fontSize = 13.sp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton("Cambiar cuenta", connect, Modifier.weight(1f), enabled = !vm.googleBusy)
+                    SecondaryButton("Desconectar", { vm.disconnectGoogle() }, Modifier.weight(1f), enabled = !vm.googleBusy)
+                }
+            } else {
+                Text(
+                    "Elegí una cuenta Google del celular. No se pide contraseña: la app solo puede ver y crear sus propios archivos en Drive.",
+                    fontSize = 13.sp, color = LilusColors.Grey,
+                )
+                BigButton("CONECTAR CON GOOGLE", connect, enabled = !vm.googleBusy)
+            }
+            if (vm.googleBusy) Text("Conectando…")
+            vm.googleResult?.let { Text(it, fontWeight = FontWeight.SemiBold) }
             HorizontalDivider()
             Text("Versión ${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = LilusColors.Grey)
         }

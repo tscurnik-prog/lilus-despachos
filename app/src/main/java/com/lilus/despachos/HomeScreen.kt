@@ -88,12 +88,13 @@ fun HomeScreen(vm: AppViewModel) {
                 SecondaryButton("Configuración", { vm.go(Screen.Config) }, Modifier.weight(1f))
             }
 
-            InfoCard(bg = if (vm.backendConfigured) LilusColors.GreenBg else LilusColors.OrangeBg) {
-                if (vm.backendConfigured) {
-                    Text("Google Drive: configurado", color = LilusColors.Green, fontWeight = FontWeight.Bold)
+            InfoCard(bg = if (vm.driveConnected) LilusColors.GreenBg else LilusColors.OrangeBg) {
+                if (vm.driveConnected) {
+                    Text("Google Drive: conectado", color = LilusColors.Green, fontWeight = FontWeight.Bold)
+                    Text(vm.driveAccount, fontSize = 13.sp)
                 } else {
-                    Text("Google Drive: pendiente de configurar", color = LilusColors.Orange, fontWeight = FontWeight.Bold)
-                    Text("La app funciona igual y guarda todo en el celular. Los despachos se enviarán cuando se configure.", fontSize = 13.sp)
+                    Text("Google Drive: sin conectar", color = LilusColors.Orange, fontWeight = FontWeight.Bold)
+                    Text("La app funciona igual y guarda todo en el celular. Conectá una cuenta Google en Configuración y se envía todo.", fontSize = 13.sp)
                 }
                 if (vm.pendingSyncCount > 0) Text("Despachos pendientes de envío: ${vm.pendingSyncCount}", fontSize = 13.sp)
             }

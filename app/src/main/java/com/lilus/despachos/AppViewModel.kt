@@ -95,8 +95,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var openDispatch by mutableStateOf<Dispatch?>(null)
         private set
-    var backendConfigured by mutableStateOf(settings.isBackendConfigured)
+    /** Email de la cuenta Google conectada ("" = sin conectar). */
+    var driveAccount by mutableStateOf(settings.googleAccount)
         private set
+    val driveConnected: Boolean get() = driveAccount.isNotBlank()
     var pendingSyncCount by mutableStateOf(0)
         private set
 
@@ -113,7 +115,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 logistics = l; openDispatch = open; pendingSyncCount = pend
                 if (logistica.isBlank() || logistica !in l) logistica = l.firstOrNull() ?: ""
             }
-            backendConfigured = settings.isBackendConfigured
+            driveAccount = settings.googleAccount
         }
     }
 
@@ -161,6 +163,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var items by mutableStateOf<List<ScanItem>>(emptyList())
         private set
     private var eventSeq = 0L
+
+    /** Modo SIGUIENTE: después de cada lectura con cámara, la cámara espera hasta tocar SIGUIENTE. */
+    var confirmEachScan by mutableStateOf(settings.confirmEachScan)
+        private set
+    var waitingNext by mutableStateOf(false)
+        private set
+
+    fun setConfirmEachScanOption(on: Boolean) {
+        settings.confirmEachScan = on
+        confirmEachScan = on
+        if (!on) waitingNext = false
+    }
+
+    /** Lectura que viene de la cámara. */
+    fun onCameraCode(raw: String) {
+        if (waitingNext) return
+        if (confirmEachScan) waitingNext = true // se pausa YA, antes de guardar, para no leer otro paquete
+        submitCode(raw)
+    }
+
+    fun next() { waitingNext = false }
 
     private fun loadScan() {
         viewModelScope.launch {
@@ -306,52 +329,63 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun retrySync(uuid: String) {
-        if (!settings.isBackendConfigured) {
-            message = "Google Drive todavía no está configurado en este celular. Pedile al administrador que lo configure."
+        if (!settings.isDriveConnected) {
+            message = "Todavía no hay una cuenta Google conectada. Conectala en Configuración."
             return
         }
         SyncWorker.enqueue(getApplication<Application>(), uuid, replace = true)
         message = "Reintentando el envío a Google Drive…"
     }
 
-    // ---- Configuración ----
-    var cfgUrl by mutableStateOf(settings.backendUrl)
-    var cfgToken by mutableStateOf(settings.deviceToken)
-    var cfgTesting by mutableStateOf(false)
+    // ---- Configuración: Google Drive ----
+    var googleBusy by mutableStateOf(false)
         private set
-    var cfgResult by mutableStateOf<String?>(null)
+    var googleResult by mutableStateOf<String?>(null)
         private set
 
     private fun loadConfig() {
-        cfgUrl = settings.backendUrl; cfgToken = settings.deviceToken; cfgResult = null
+        driveAccount = settings.googleAccount
+        confirmEachScan = settings.confirmEachScan
+        googleResult = null
     }
 
-    fun saveConfig() {
-        val url = cfgUrl.trim()
-        if (url.isNotEmpty() && !Settings.isValidBackendUrl(url)) {
-            cfgResult = "La dirección tiene que empezar con https://"
-            return
-        }
-        settings.backendUrl = url
-        settings.deviceToken = cfgToken
-        backendConfigured = settings.isBackendConfigured
-        cfgResult = if (backendConfigured) "Configuración guardada." else "Guardado. Falta completar la URL y el token para activar Google Drive."
-        if (backendConfigured) viewModelScope.launch { safeDb { SyncWorker.enqueueAllPending(getApplication<Application>(), repo, replace = true) } }
+    fun setGoogleBusy(busy: Boolean) { googleBusy = busy }
+
+    fun onGoogleError(msg: String) {
+        googleBusy = false
+        googleResult = msg
     }
 
-    fun testConfig() {
-        val url = cfgUrl.trim(); val token = cfgToken.trim()
-        cfgTesting = true; cfgResult = null
+    /** Google entregó el permiso: se averigua qué cuenta es y se deja conectada. */
+    fun onGoogleToken(token: String) {
+        googleBusy = true
+        googleResult = null
         viewModelScope.launch {
-            val r = withContext(kotlinx.coroutines.Dispatchers.IO) { lilus.syncClient.ping(url, token) }
-            cfgResult = when (r) {
-                is SyncOutcome.Success -> "✅ Conexión correcta con el backend."
-                is SyncOutcome.Retryable -> "No se pudo conectar: ${r.message}"
-                is SyncOutcome.Permanent -> "Error: ${r.message}"
-                SyncOutcome.NotConfigured -> "Completá una URL https:// y el token."
+            try {
+                val email = withContext(kotlinx.coroutines.Dispatchers.IO) { lilus.driveClient.accountEmail(token) }
+                if (email.isBlank()) {
+                    googleResult = "Google no informó la cuenta. Probá de nuevo."
+                } else {
+                    if (!email.equals(settings.googleAccount, ignoreCase = true)) {
+                        settings.driveRootId = ""; settings.driveBaseId = ""
+                    }
+                    settings.googleAccount = email
+                    driveAccount = email
+                    googleResult = "✅ Conectado como $email. Los despachos se guardan en Drive, carpeta \"despachos\"."
+                    safeDb { SyncWorker.enqueueAllPending(getApplication<Application>(), repo, replace = true) }
+                }
+            } catch (e: DriveException) {
+                googleResult = e.message ?: "No se pudo conectar con Google Drive."
+            } finally {
+                googleBusy = false
             }
-            cfgTesting = false
         }
+    }
+
+    fun disconnectGoogle() {
+        settings.disconnectDrive()
+        driveAccount = ""
+        googleResult = "Cuenta desconectada. Los despachos nuevos quedan guardados solo en el celular."
     }
 
     override fun onCleared() {

@@ -110,6 +110,10 @@ object Fmt {
 object Catalog {
     val EMPRESAS = listOf("ProntoTec", "DE-ELECTRO")
     val LOGISTICAS_INICIALES = listOf(
+        "Colecta Meli", "Flex", "Frávega", "Express", "Urbano", "EnvíoPack",
+    )
+    /** Lista de la versión 1.0, para migrar celulares ya instalados. */
+    val LOGISTICAS_V1 = listOf(
         "EnvíoPack", "EnvíoPack FLEX", "Loginter", "Frávega", "Urbano",
         "Andreani", "OCA", "Ocasa", "Correo Argentino", "Otras",
     )

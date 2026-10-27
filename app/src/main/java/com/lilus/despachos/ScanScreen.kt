@@ -85,7 +85,7 @@ fun ScanScreen(vm: AppViewModel) {
         // ---- Cámara ----
         Box(Modifier.fillMaxWidth().height(290.dp).background(Color.Black), contentAlignment = Alignment.Center) {
             when {
-                hasPermission -> CameraPreview(paused = dialogsOpen || vm.closing, onCode = { vm.submitCode(it) })
+                hasPermission -> CameraPreview(paused = dialogsOpen || vm.closing || vm.waitingNext, waitingNext = vm.waitingNext, onCode = { vm.onCameraCode(it) })
                 else -> Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("La app necesita la cámara para leer los códigos.", color = Color.White, fontSize = 16.sp)
                     Text("Mientras tanto podés cargar los códigos a mano.", color = Color(0xFFCFD8E3), fontSize = 13.sp)
@@ -112,6 +112,16 @@ fun ScanScreen(vm: AppViewModel) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text("BULTOS REGISTRADOS: ${vm.count}", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            }
+
+            if (vm.waitingNext) {
+                val dup = vm.lastEvent is ScanEvent.Dup
+                BigButton(
+                    "SIGUIENTE  ▶",
+                    { vm.next() },
+                    modifier = Modifier.height(72.dp),
+                    color = if (dup) LilusColors.Red else LilusColors.Green,
+                )
             }
 
             EventCard(vm.lastEvent, vm.count)
@@ -251,7 +261,7 @@ private fun EventCard(e: ScanEvent?, count: Int, compact: Boolean = false) {
 }
 
 @Composable
-private fun CameraPreview(paused: Boolean, onCode: (String) -> Unit) {
+private fun CameraPreview(paused: Boolean, waitingNext: Boolean, onCode: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var torchOn by remember { mutableStateOf(false) }
@@ -266,6 +276,8 @@ private fun CameraPreview(paused: Boolean, onCode: (String) -> Unit) {
 
     val debouncer = remember { ScanDebouncer() }
     val latestOnCode = rememberUpdated(onCode)
+    // Al reanudar, el código que sigue frente a la cámara no se vuelve a leer
+    LaunchedEffect(paused) { if (!paused) debouncer.holdCurrent(System.currentTimeMillis()) }
     val analyzer = remember { BarcodeAnalyzer(debouncer) { code -> ContextCompat.getMainExecutor(context).execute { latestOnCode.value(code) } } }
     analyzer.paused = paused
 
@@ -328,7 +340,7 @@ private fun CameraPreview(paused: Boolean, onCode: (String) -> Unit) {
         }
         if (paused) {
             Text(
-                "Lectura en pausa", color = Color.White,
+                if (waitingNext) "Tocá SIGUIENTE para leer el próximo paquete" else "Lectura en pausa", color = Color.White,
                 modifier = Modifier.align(Alignment.BottomCenter).background(Color(0x99000000)).padding(6.dp)
             )
         }
