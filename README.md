@@ -22,34 +22,45 @@ Excel, historial y envío a Google Drive.
 Si se cierra la app, se corta internet o se reinicia el celular, el despacho en curso queda guardado:
 al volver a abrir aparece **CONTINUAR DESPACHO**.
 
-## Google Drive (configuración única)
+## Google Drive (con la cuenta Google del celular)
 
-Sin esto la app funciona igual y muestra “Google Drive: pendiente de configurar”.
+En la app: **Configuración → CONECTAR CON GOOGLE** → elegir una cuenta del celular → Permitir.
+No se pide contraseña. La app usa el permiso `drive.file`: solo ve y crea sus propios archivos.
 
-1. Con la cuenta Google de Lilus, entrar a <https://script.google.com> → **Nuevo proyecto** → nombre “LILUS DESPACHOS Backend”.
-2. Pegar el contenido de `backend/Code.gs` en `Código.gs` y guardar.
-3. Ejecutar la función **`configurar`** (autorizar los permisos de Drive y Sheets). Crea la carpeta `LILUS - DESPACHOS` y la base central.
-4. **Implementar → Nueva implementación → Aplicación web**: ejecutar como *Yo*, acceso *Cualquier usuario*. Copiar la URL `…/exec`.
-5. Por cada celular: en `crearTokenCelular` cambiar el nombre, ejecutar y copiar el token del *Registro de ejecución*.
-6. En el celular: **Configuración** → pegar URL y token → *Probar conexión* → *Guardar*.
+Estructura en el Drive de esa cuenta:
 
-Seguridad: conocer la URL no alcanza; sin un token válido todo se rechaza. Los celulares solo pueden **agregar**
-despachos, nunca modificar o borrar. Tokens se crean/revocan solo desde el editor (`revocarTokenCelular`).
-El envío es idempotente (UUID por despacho): reintentos no duplican archivos ni filas. No hay contraseñas ni
-credenciales de Google en el código.
+```
+despachos/
+  LILUS - Base de despachos      (planilla: hojas "Registros", una fila por bulto, y "Despachos")
+  Colecta Meli/
+    2026-10-27 - Colecta Meli - 001.pdf
+    2026-10-27 - Colecta Meli - 001.xlsx
+  Flex/ ...
+```
 
-Estructura en Drive: `LILUS - DESPACHOS/AÑO/MES/FECHA/LOGÍSTICA/DESPACHO_001.pdf` y `.xlsx`, más la planilla
-`LILUS - Base de despachos` (hojas *Despachos* y *Registros*, una fila por bulto).
+Envío automático en segundo plano con reintentos; sin internet queda pendiente. Idempotente: cada
+archivo lleva el UUID del despacho y la planilla se revisa por UUID antes de agregar filas.
+Si varios celulares usan la misma cuenta, comparten la carpeta `despachos`.
+
+**Requisito único (administrador):** la app está registrada en Google Cloud (proyecto con Google Drive API
+y Google Sheets API activas, pantalla de consentimiento publicada y un cliente OAuth tipo *Android* con
+paquete `com.lilus.despachos` y la huella SHA-1 que imprime el workflow en el paso *Verificar APK*).
+Sin eso, al conectar la app muestra "La app todavía no está habilitada en Google".
+
+## Opciones de escaneo
+
+**Confirmar cada lectura con SIGUIENTE** (Configuración, activado de fábrica): después de cada lectura la
+cámara se pausa hasta tocar SIGUIENTE, para no leer otro paquete por mover el celular.
 
 ## Técnica
 
 Kotlin · Jetpack Compose · CameraX 1.4 · ML Kit Barcode (modelo incluido, funciona sin internet) · SQLite ·
-WorkManager (reintentos) · OkHttp. Gradle 8.11.1 · AGP 8.7.3 · Kotlin 2.0.21 · JDK 17 · minSdk 24 · targetSdk 35.
+WorkManager (reintentos) · OkHttp · Google Identity (AuthorizationClient) + Drive v3 / Sheets v4. Gradle 8.11.1 · AGP 8.7.3 · Kotlin 2.0.21 · JDK 17 · minSdk 24 · targetSdk 35.
 
-Compilación: `.github/workflows/android.yml` (push a `main` o manual). Publica el APK como artefacto y corre:
-- `app/src/test`: registro, duplicados, ceros iniciales, sufijos, persistencia y recuperación, recuento,
-  cierre, sincronización con reintentos e idempotencia (backend simulado por HTTPS), Excel y paginación del PDF.
-- `backend/backend.test.js`: tokens, idempotencia, reintentos parciales, códigos como texto.
+Compilación: `.github/workflows/android.yml` (push a `main` o manual). Publica el APK como artefacto y corre
+las pruebas de `app/src/test`: registro, duplicados, ceros iniciales, sufijos, persistencia y recuperación,
+recuento, cierre, migración de logísticas, modo SIGUIENTE, Excel, paginación del PDF y subida a Drive contra
+un Drive/Sheets simulado (estructura de carpetas, idempotencia, reintentos, errores).
 
 Requiere teléfono físico (no automatizable en CI): cámara/lectura real, linterna, sonidos y vibración,
-dibujo final del PDF e impresión, envío real a Google Drive.
+dibujo final del PDF e impresión, conexión real con una cuenta Google y subida real a Drive.
