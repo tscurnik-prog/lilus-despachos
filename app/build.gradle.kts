@@ -12,8 +12,8 @@ android {
         applicationId = "com.lilus.despachos"
         minSdk = 24          // Android 7.0
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     // Firma de depuración FIJA (app/lilus-debug.jks, contraseñas estándar de debug "android").
@@ -86,6 +86,10 @@ dependencies {
     // Sincronización en segundo plano con reintentos
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Conexión con la cuenta Google del celular (Google Drive, permiso drive.file)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
