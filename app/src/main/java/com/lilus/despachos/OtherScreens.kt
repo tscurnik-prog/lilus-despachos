@@ -212,7 +212,7 @@ fun ConfigScreen(vm: AppViewModel) {
     val connect: () -> Unit = {
         val act = activity
         if (act != null) {
-            vm.setGoogleBusy(true)
+            vm.markGoogleBusy(true)
             scope.launch {
                 // Sin cuenta indicada: Android muestra las cuentas Google del celular para elegir
                 when (val r = GoogleAuth.start(act, null)) {

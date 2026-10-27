@@ -349,7 +349,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         googleResult = null
     }
 
-    fun setGoogleBusy(busy: Boolean) { googleBusy = busy }
+    fun markGoogleBusy(busy: Boolean) { googleBusy = busy }
 
     fun onGoogleError(msg: String) {
         googleBusy = false
