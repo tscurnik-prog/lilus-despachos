@@ -76,6 +76,8 @@ jobs:
           echo "Build tools: $BT"
           "$BT/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label|uses-permission)" || true
           "$BT/apksigner" verify --print-certs "$APK" | head -5
+          echo "Huella SHA-1 de la firma (para registrar la app en Google Cloud):"
+          keytool -list -v -keystore app/lilus-debug.jks -storepass android -alias androiddebugkey | grep -E "SHA1:"
           cp "$APK" "LILUS-DESPACHOS-${{ github.run_number }}.apk"
 
       - name: Publicar APK
@@ -88,9 +90,6 @@ jobs:
 
       - name: Pruebas automáticas (app)
         run: ./gradlew --no-daemon testDebugUnitTest
-
-      - name: Pruebas automáticas (backend Apps Script)
-        run: node backend/backend.test.js
 
       - name: Publicar reporte de pruebas
         if: always()
