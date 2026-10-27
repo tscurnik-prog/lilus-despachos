@@ -162,6 +162,25 @@ class DispatchRepositoryTest {
         assertEquals(0, repo.searchCode("%").size)
     }
 
+    @Test fun migracionDeLogisticasDesdeV1() {
+        // Simula un celular con la versión 1.0: lista vieja + una logística agregada a mano
+        val db = helper.writableDatabase
+        db.delete("logistic", null, null)
+        (Catalog.LOGISTICAS_V1 + "Transporte Propio").forEachIndexed { i, n ->
+            db.insert("logistic", null, android.content.ContentValues().apply { put("name", n); put("position", i) })
+        }
+        val d = repo.startDispatch("Juan", "ProntoTec", "Loginter", t0)
+        repo.registerCode(d.uuid, "L1", t0)
+        repo.closeDispatch(d.uuid, t0 + 1)
+
+        helper.onUpgrade(db, 1, 2)
+
+        assertEquals(Catalog.LOGISTICAS_INICIALES + "Transporte Propio", repo.logistics())
+        // el historial no se toca
+        assertEquals("Loginter", repo.getDispatch(d.uuid)!!.logistica)
+        assertEquals(1, repo.countItems(d.uuid))
+    }
+
     @Test fun logisticasInicialesYAlta() {
         assertTrue(repo.logistics().containsAll(Catalog.LOGISTICAS_INICIALES))
         assertTrue(repo.addLogistic("Mi Transporte"))

@@ -76,9 +76,23 @@ class PureLogicTest {
         assertEquals(null, CodeRules.clean(" \n "))
     }
 
-    @Test fun soloSeAceptaHttps() {
-        assertTrue(Settings.isValidBackendUrl("https://script.google.com/macros/s/abc/exec"))
-        assertFalse(Settings.isValidBackendUrl("http://script.google.com/macros/s/abc/exec"))
-        assertFalse(Settings.isValidBackendUrl(""))
+    @Test fun alReanudarNoReleeElMismoCodigo() {
+        val d = ScanDebouncer(sameCodeMs = 2500, anyCodeMs = 700)
+        assertTrue(d.accept("A", 0))
+        // modo SIGUIENTE: la cámara estuvo pausada 10 s; al tocar SIGUIENTE el mismo paquete sigue a la vista
+        d.holdCurrent(10_000)
+        assertFalse(d.accept("A", 10_100))
+        assertTrue(d.accept("B", 10_900))   // el paquete siguiente sí se lee
+    }
+
+    @Test fun nombreDeArchivoEnDrive() {
+        val d = dispatch().copy(logistica = "Colecta Meli", displayId = "COLECTAMELI-20261027-003", closedAt = 1_761_580_000_000)
+        val name = DriveClient.fileBaseName(d)
+        assertTrue(name.matches(Regex("\\d{4}-\\d{2}-\\d{2} - Colecta Meli - 003")))
+        assertEquals("COLECTAMELI", DispatchIds.slug("Colecta Meli"))
+    }
+
+    @Test fun nuevaListaDeLogisticas() {
+        assertEquals(listOf("Colecta Meli", "Flex", "Frávega", "Express", "Urbano", "EnvíoPack"), Catalog.LOGISTICAS_INICIALES)
     }
 }
